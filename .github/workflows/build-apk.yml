@@ -34,9 +34,9 @@ jobs:
 
       - name: Install Gradle
         run: |
-          curl -sL https://services.gradle.org/distributions/gradle-8.4-bin.zip -o gradle.zip
+          curl -sL https://services.gradle.org/distributions/gradle-8.6-bin.zip -o gradle.zip
           unzip -q gradle.zip
-          echo "$PWD/gradle-8.4/bin" >> "$GITHUB_PATH"
+          echo "$PWD/gradle-8.6/bin" >> "$GITHUB_PATH"
 
       - name: Build release APK
         run: gradle -p android assembleRelease
