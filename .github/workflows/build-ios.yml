@@ -1,0 +1,74 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:      # 手动触发：在 GitHub 仓库 Actions 页面点「Run workflow」
+  # 如需每次推送自动构建，把下面的注释打开（前提：仓库已配置苹果签名 secrets）
+  # push:
+  #   branches: [ main ]
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    # 缺少签名密钥时跳过，避免无效构建
+    if: ${{ secrets.IOS_CERTIFICATE != '' && secrets.IOS_PROVISIONING_PROFILE != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Capacitor
+        run: npm install
+
+      - name: Generate iOS project
+        run: |
+          npx cap add ios || echo "ios platform already exists"
+          npx cap sync ios
+
+      - name: Import signing certificate & provisioning profile
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROVISIONING_PROFILE_NAME: ${{ secrets.PROVISIONING_PROFILE_NAME }}
+        run: |
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          echo -n "$IOS_CERTIFICATE" | base64 --decode > cert.p12
+          security import cert.p12 -k build.keychain -P "$IOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -f pkcs12
+          echo -n "$IOS_PROVISIONING_PROFILE" | base64 --decode > profile.mobileprovision
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp profile.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/"
+          sed -i '' "s/YOUR_TEAM_ID/$APPLE_TEAM_ID/g" ExportOptions.plist
+          sed -i '' "s/CaidouPoker AdHoc/$PROVISIONING_PROFILE_NAME/g" ExportOptions.plist
+
+      - name: Build & archive
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROVISIONING_PROFILE_NAME: ${{ secrets.PROVISIONING_PROFILE_NAME }}
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release \
+            archive -archivePath build/App.xcarchive \
+            DEVELOPMENT_TEAM=$APPLE_TEAM_ID \
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME" \
+            CODE_SIGN_IDENTITY="iPhone Distribution"
+
+      - name: Export IPA
+        run: xcodebuild -exportArchive -archivePath build/App.xcarchive -exportPath build -exportOptionsPlist ExportOptions.plist
+
+      - name: Upload IPA to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag: ios-latest
+          name: 彩豆扑克 iOS
+          files: build/App.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -172,7 +172,7 @@
       </div>
     </div>
 
-    <p class="tagline">无需应用商店，安卓 / iPhone 都能像 App 一样安装到桌面</p>
+    <p class="tagline">安卓直接下载 APK 安装；iPhone 用 Safari「添加到主屏幕」即装，或上架 App Store 下载</p>
 
     <div class="url-box">
       <label>用手机浏览器打开以下地址</label>
@@ -181,8 +181,9 @@
     </div>
 
     <div class="note">
-      安卓用户可直接下载 <b>APK 安装包</b>（见下方按钮），安装即用；<br/>
-      iPhone 用户请使用 Safari 的「添加到主屏幕」安装（iOS 不支持侧载 APK）。
+      <b>安卓</b>：可直接下载 APK 安装包，安装即用（见下方按钮）。<br/>
+      <b>iPhone</b>：用 Safari 的「添加到主屏幕」即可像 App 一样安装（PWA，立即可用，无需账号）；<br/>
+      原生 iOS App（.ipa）已备好自动打包流程，待你提供苹果开发者账号签名后，即可上架 App Store / TestFlight 供下载。
     </div>
 
     <div class="cards">
@@ -214,11 +215,22 @@
         </ol>
         <p class="tip">APK 由 GitHub Actions 自动编译并发布到 Release；每次推送代码会自动重新构建。</p>
       </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h3><span>🍎</span> iPhone 原生 App（App Store / TestFlight）</h3>
+        <ol>
+          <li>当前最快捷：用 <b>Safari</b> 打开本页 → 点底部分享「添加到主屏幕」，即可把游戏装到桌面（PWA，立即可用）。</li>
+          <li>想要真正的 App Store 应用：需你有 <b>苹果开发者账号（$99/年）</b>，在仓库配置签名密钥后，CI 自动打出 <b>彩豆扑克.ipa</b>。</li>
+          <li>上架后 iPhone 用户可在 App Store / TestFlight 搜索「彩豆扑克」下载安装。</li>
+        </ol>
+        <p class="tip">iOS 出于安全限制，无法直接像安卓那样下载 .ipa 侧载安装；真机分发必须经过苹果签名（App Store / TestFlight / 企业分发）。原生 App 工程与打包工作流已就绪，待你提供苹果证书即可一键产出。</p>
+      </div>
     </div>
 
     <div class="actions">
       <a href="/">🎮 直接进入游戏</a>
       <a class="secondary" href="https://github.com/827590612/caidou-poker/releases/latest/download/app-release.apk">📦 下载安卓 APK</a>
+      <a class="secondary" href="https://github.com/827590612/caidou-poker/releases/tag/ios-latest">🍎 iPhone IPA（原生版）</a>
       <button class="secondary" id="install-from-landing" type="button">📲 安装到本设备</button>
     </div>
 

@@ -5,7 +5,16 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "cap:add": "npx cap add ios",
+    "cap:sync": "npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^5.7.4",
+    "@capacitor/ios": "^5.7.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.7.4"
   },
   "engines": {
     "node": ">=18"

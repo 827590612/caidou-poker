@@ -1,0 +1,10 @@
+{
+  "appId": "com.caidou.poker",
+  "appName": "彩豆扑克",
+  "webDir": "www",
+  "server": {
+    "url": "https://caidou-poker.onrender.com",
+    "cleartext": false
+  },
+  "plugins": {}
+}

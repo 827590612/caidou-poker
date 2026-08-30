@@ -7,3 +7,6 @@ accounts.json
 64237523536499bb4e74cbebaf738e7a.png
 android/**/build/
 *.apk
+ios/App/Pods/
+ios/App/build/
+ios/App/App.xcworkspace
