@@ -63,6 +63,11 @@
     btnLook: document.getElementById('btn-look'),
     btnFold: document.getElementById('btn-fold'),
 
+    btnSpectate: document.getElementById('btn-spectate'),
+    btnExitSpectate: document.getElementById('btn-exit-spectate'),
+    spectateBanner: document.getElementById('spectate-banner'),
+    spectateRoom: document.getElementById('spectate-room'),
+
     players: [
       document.getElementById('player-0'),
       document.getElementById('player-1'),
@@ -78,6 +83,7 @@
   let pendingRaise = 0;
   let lastTurnKey = '';
   let authMode = 'login';
+  let spectating = false;   // 是否为观战模式（不占座位、不可操作）
 
   // ---------- 存储 ----------
   function loadAccount() {
@@ -186,6 +192,55 @@
     els.conn.textContent = text;
     els.conn.classList.toggle('ok', !!ok);
     els.conn.classList.toggle('bad', !ok);
+  }
+
+  // 观战者通道：与玩家 SSE 共用服务器推送，但服务端以虚拟座位 -1 下发隐藏暗牌、无操作权限的只读视图
+  function openSpectateStream(room, token) {
+    if (sse) { try { sse.close(); } catch (e) {} }
+    const url = `/api/stream?room=${encodeURIComponent(room)}&spectate=1&token=${encodeURIComponent(token || '')}`;
+    sse = new EventSource(url);
+    sse.onopen = () => setConn('观战中', true);
+    sse.onmessage = (ev) => {
+      let data;
+      try { data = JSON.parse(ev.data); } catch (e) { return; }
+      view = data;
+      render();
+    };
+    sse.onerror = () => {
+      // EventSource 会自动按 retry:2000 重连，这里仅更新连接状态
+      if (sse && sse.readyState === EventSource.CONNECTING) setConn('观战连接中断，重连中…', false);
+    };
+  }
+
+  async function spectateRoom() {
+    if (!account) { showAuth(); return; }
+    const roomInput = (els.inputRoom.value || '').trim().toUpperCase();
+    if (!roomInput) { alert('请输入要观战的房间号'); return; }
+    els.btnSpectate.disabled = true;
+    try {
+      // 先用 spectate=1 拉一次状态，验证房间存在；拿不到则返回 404
+      const v = await api(`/api/state?room=${roomInput}&spectate=1`);
+      view = v;
+      spectating = true;
+      history.replaceState(null, '', `?room=${encodeURIComponent(roomInput)}&spectate=1`);
+      showRoom();
+      showSpectateBanner();
+      openSpectateStream(roomInput, account.token);
+    } catch (e) {
+      alert('观战失败：' + e.message);
+    } finally {
+      els.btnSpectate.disabled = false;
+    }
+  }
+
+  function exitSpectate() {
+    if (sse) { try { sse.close(); } catch (e) {} }
+    sse = null;
+    spectating = false;
+    view = null;
+    els.spectateBanner.hidden = true;
+    setConn('未进入房间', false);
+    showJoin();
   }
 
   // ---------- 渲染 ----------
@@ -324,7 +379,7 @@
       if (v > 0 || r < rn) rbParts.push(labels[r] + ' ' + v);
     }
     if (rbParts.length && !lobby) {
-      rbEl.textContent = parts.join(' · ');
+      rbEl.textContent = rbParts.join(' · ');
       rbEl.hidden = false;
     } else {
       rbEl.textContent = '';
@@ -464,8 +519,8 @@
       els.roundSummary.hidden = true;
     }
 
-    // 座位已被回收（被移出房间）→ 回到房间选择
-    if (roomSession && !view.you) { leaveRoomUI('你已离开房间。'); return; }
+    // 座位已被回收（被移出房间）→ 回到房间选择；观战者不占座位、view.you 恒为 null，需排除
+    if (roomSession && !view.you && !spectating) { leaveRoomUI('你已离开房间。'); return; }
 
     // 进入房间后牌桌画面常驻；中央面板在大厅显示房间控制，游戏中显示癞子牌
     els.joinSection.hidden = true;
@@ -473,15 +528,28 @@
 
     const lobby = view.phase === 'lobby';
 
-    els.roomPanel.hidden = !lobby;
-    els.wild.hidden = lobby;
-    els.botActions.hidden = !(lobby || view.phase === 'result');
-    els.messageArea.hidden = lobby;   // 大厅用中央 lobby-msg
-    els.controls.hidden = lobby;      // 大厅用中央「准备 / 开始」
+    if (spectating) {
+      // 观战模式：纯只读，不显示任何可操作面板（房间控制 / 人机陪玩 / 操作按钮）
+      els.roomPanel.hidden = true;
+      els.botActions.hidden = true;
+      els.messageArea.hidden = false;
+      els.controls.hidden = true;
+      showSpectateBanner();
+    } else {
+      els.roomPanel.hidden = !lobby;
+      els.wild.hidden = lobby;
+      els.botActions.hidden = !(lobby || view.phase === 'result');
+      els.messageArea.hidden = lobby;   // 大厅用中央 lobby-msg
+      els.controls.hidden = lobby;      // 大厅用中央「准备 / 开始」
+    }
 
     if (lobby) {
       layoutSeats(true);   // 大厅也要布局：显示空位框，人机补位后位置稳定
-      renderLobby();
+      if (spectating) {
+        showMessage(view.message || '（观战模式）等待玩家准备…');
+      } else {
+        renderLobby();
+      }
       for (let i = 0; i < MAX_SEATS; i++) renderPlayer(i, true);
       return;
     }
@@ -505,7 +573,7 @@
 
     // 结算阶段：显示准备 / 开始下一局，同时允许房主调整人机
     const resultPhase = (view.phase === 'result');
-    if (resultPhase) renderBotArea(view.filled);
+    if (resultPhase && !spectating) renderBotArea(view.filled);
     els.btnReady.hidden = !resultPhase;
     if (resultPhase) {
       els.btnReady.disabled = false;
@@ -555,6 +623,11 @@
     els.authSection.hidden = true;
     els.joinSection.hidden = true;
     els.table.hidden = false;
+  }
+
+  function showSpectateBanner() {
+    if (view && view.room) els.spectateRoom.textContent = view.room;
+    els.spectateBanner.hidden = false;
   }
 
   function leaveRoomUI(msg) {
@@ -682,6 +755,9 @@
     leaveRoomUI();
   });
 
+  els.btnSpectate.addEventListener('click', spectateRoom);
+  els.btnExitSpectate.addEventListener('click', exitSpectate);
+
   els.btnCopy.addEventListener('click', async () => {
     const text = els.inviteLink.value;
     try {
@@ -732,6 +808,11 @@
       .then(data => {
         saveAccount({ token: savedAccount.token, phone: data.phone, code: data.code, nickname: data.nickname });
         showJoin();
+        // 通过 ?spectate=1 进入（如刷新观战页面）：登录后直接回到观战模式
+        if (roomParam && params.get('spectate') === '1') {
+          spectateRoom();
+          return;
+        }
         // 有房间会话则直接回到原座位（刷新 / 重开页面都直接回到房间等待界面）
         const rs = loadRoomSession();
         if (rs && (!roomParam || rs.room === roomParam.toUpperCase())) {

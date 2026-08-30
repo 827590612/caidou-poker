@@ -233,7 +233,8 @@ function createRoom() {
     gameRunning: false,
     winnerSeat: -1,
     awaitingAction: null,
-    awaitTimer: null
+    awaitTimer: null,
+    spectators: new Map()   // token -> { name, sse, connected } 观战者（不占座位、不可操作）
   };
   rooms.set(code, room);
   return room;
@@ -519,6 +520,15 @@ function broadcast(room) {
     if (p && p.sse) {
       try { p.sse.write(`data: ${JSON.stringify(buildView(room, p.id))}\n\n`); }
       catch (e) { /* ignore */ }
+    }
+  }
+  // 旁观者：用 -1 作为虚拟座位，buildView 会自动隐藏所有暗牌、不分配操作权限
+  if (room.spectators) {
+    for (const sp of room.spectators.values()) {
+      if (sp.sse) {
+        try { sp.sse.write(`data: ${JSON.stringify(buildView(room, -1))}\n\n`); }
+        catch (e) { /* ignore */ }
+      }
     }
   }
 }
@@ -980,6 +990,10 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/state' && req.method === 'GET') {
     const room = rooms.get((u.searchParams.get('room') || '').toUpperCase());
+    if (u.searchParams.get('spectate') === '1') {
+      if (!room) return sendJson(res, 404, { error: '房间不存在' });
+      return sendJson(res, 200, buildView(room, -1));
+    }
     const seat = parseInt(u.searchParams.get('seat') || '-1', 10);
     if (!room || !room.players[seat]) return sendJson(res, 404, { error: '无效座位' });
     return sendJson(res, 200, buildView(room, seat));
@@ -987,6 +1001,33 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/stream' && req.method === 'GET') {
     const room = rooms.get((u.searchParams.get('room') || '').toUpperCase());
+    const spectate = u.searchParams.get('spectate') === '1';
+
+    // ---------- 旁观者通道 ----------
+    if (spectate) {
+      if (!room) { res.writeHead(404); res.end('not found'); return; }
+      const token = u.searchParams.get('token') || '';
+      const phone = phoneOf(token);
+      const name = (phone && accounts[phone]) ? accounts[phone].nickname : '观众';
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      });
+      res.write('retry: 2000\n\n');
+      const spectator = { name, sse: res, connected: true };
+      room.spectators.set(token || ('sp-' + Math.random().toString(36).slice(2)), spectator);
+      broadcast(room);
+      const hb = setInterval(() => { try { res.write(': hb\n\n'); } catch (e) {} }, 25000);
+      req.on('close', () => {
+        clearInterval(hb);
+        for (const [k, v] of room.spectators) if (v.sse === res) room.spectators.delete(k);
+        broadcast(room);
+      });
+      return;
+    }
+
     const seat = parseInt(u.searchParams.get('seat') || '-1', 10);
     const seatToken = u.searchParams.get('seatToken') || '';
     if (!room || !room.players[seat] || room.players[seat].seatToken !== seatToken) {

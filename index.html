@@ -15,7 +15,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" href="/icons/favicon-64.png" />
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
   <div id="app">
@@ -29,6 +29,12 @@
         <span id="conn" class="conn">未连接</span>
       </div>
     </header>
+
+    <!-- 观战横幅 -->
+    <div id="spectate-banner" class="spectate-banner" hidden>
+      🔭 正在观战房间 <b id="spectate-room">--</b>
+      <button id="btn-exit-spectate" class="link-btn" type="button">退出观战</button>
+    </div>
 
     <!-- ============ 登录 / 注册 ============ -->
     <section id="auth-section" class="lobby" hidden>
@@ -68,7 +74,8 @@
           <input id="input-room" type="text" maxlength="4" placeholder="留空则创建新房间" />
         </div>
         <button id="btn-enter" class="primary" type="button">创建房间并进入</button>
-        <p class="hint">房间号留空 → <b>创建新房间并直接进入牌桌等待</b>；填入好友的房间号 → 加入他的房间。进入后就在牌桌画面里点「准备」，凑不齐人可点「补满人机」让电脑补位，<b>2~4 人</b>全部准备后房主开始。</p>
+        <button id="btn-spectate" class="ghost" type="button">🔭 观战房间</button>
+        <p class="hint">房间号留空 → <b>创建新房间并直接进入牌桌等待</b>；填入好友的房间号 → 加入他的房间；点「🔭 观战房间」→ 只围观不参战（适合房主或好友旁观）。进入后就在牌桌画面里点「准备」，凑不齐人可点「补满人机」让电脑补位，<b>2~4 人</b>全部准备后房主开始。</p>
         <button id="btn-logout" class="link-btn" type="button">退出登录</button>
       </div>
     </section>
@@ -315,6 +322,6 @@
     })();
   </script>
 
-  <script src="game.js?v=4"></script>
+  <script src="game.js?v=5"></script>
 </body>
 </html>
