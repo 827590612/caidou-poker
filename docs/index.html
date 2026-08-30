@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <title>彩豆扑克 · 单机版（浏览器直接玩）</title>
+  <meta name="theme-color" content="#5e35b1" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="icons/favicon-64.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="top-bar">
+      <h1>彩豆扑克 <span class="net-badge">单机版</span></h1>
+      <div class="info">
+        <span>房间：<strong id="top-room">单机</strong></span>
+        <span>彩豆总颗数：<strong id="pot">0</strong> 颗</span>
+        <span>当前彩豆：<strong id="current-bet">0</strong> 颗</span>
+        <span>轮次：<strong id="round">大厅</strong></span>
+        <span id="conn" class="conn">浏览器本地运行</span>
+      </div>
+    </header>
+
+    <!-- 开局设置 -->
+    <section id="setup" class="lobby">
+      <div class="lobby-card">
+        <h2>单机对战（无需联网）</h2>
+        <p class="hint">本版本在<strong>你的浏览器里</strong>直接运行，对战电脑（人机），<strong>不需要服务器</strong>。适合放到 GitHub Pages 等静态托管上直接玩。注意：这是<strong>单机 vs 电脑</strong>，不是联网多人。</p>
+        <div class="row">
+          <label for="opponent-count">对手数量（人机）</label>
+          <select id="opponent-count">
+            <option value="1">1 个（2 人局）</option>
+            <option value="2" selected>2 个（3 人局）</option>
+            <option value="3">3 个（4 人局）</option>
+          </select>
+        </div>
+        <button id="btn-start-solo" class="primary" type="button">开始游戏</button>
+      </div>
+    </section>
+
+    <!-- 牌桌 -->
+    <main class="table" id="table" hidden>
+      <div class="center-area">
+        <div class="wild-area" id="wild" hidden></div>
+        <div class="round-summary" id="round-summary" hidden></div>
+        <p class="lobby-msg" id="solo-msg"></p>
+        <div class="room-buttons">
+          <button id="btn-restart" class="primary" type="button" hidden>再来一局</button>
+        </div>
+      </div>
+
+      <div class="player" id="player-0" data-pos="bottom">
+        <div class="player-info">
+          <span class="name">座位 1</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+      <div class="player" id="player-1" data-pos="right">
+        <div class="player-info">
+          <span class="name">座位 2</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+      <div class="player" id="player-2" data-pos="top">
+        <div class="player-info">
+          <span class="name">座位 3</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+      <div class="player" id="player-3" data-pos="left">
+        <div class="player-info">
+          <span class="name">座位 4</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+    </main>
+
+    <div class="message-area" id="message-area" hidden>
+      <p id="message">欢迎来到扑克牌游戏！</p>
+    </div>
+
+    <div class="controls" id="controls" hidden>
+      <button id="btn-call" disabled type="button">跟（确认扔豆）</button>
+      <button id="btn-raise" disabled type="button">加颗</button>
+      <button id="btn-look" disabled type="button">看牌</button>
+      <button id="btn-fold" disabled type="button">弃牌</button>
+    </div>
+
+    <div class="rules">
+      <h2>规则说明</h2>
+      <p>每人起始 5000 颗，每局先下 10 颗底注。开局抽一张<strong>癞子牌</strong>，其点数即“百搭”：手中与该点数相同的牌都变癞子，每局随机变换。</p>
+      <p>每人 5 张牌（2 暗 + 3 明）。暗牌游戏中都盖着，第 7 轮结束后才一起翻开比大小。开局发 2 暗+1 明 → 扔豆；轮完发第 4 张明牌再扔豆；轮完发第 5 张明牌再扔豆；之后还有第 6、7 轮扔豆。</p>
+      <p><strong>看牌</strong>：轮到自己时可点「看牌」，自己的 2 张暗牌仅自己可见；看牌后你每轮扔的彩豆是没看牌玩家的 2 倍（若所有人已看牌则等额）。</p>
+      <p>计分：三条 / 四条 / 五条分别加成；都没有则 5 张相加。比大小先比牌型再比总颗。</p>
+    </div>
+  </div>
+
+  <script src="game.client.js"></script>
+</body>
+</html>
