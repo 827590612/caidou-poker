@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>扑克牌游戏 · 联机对战</title>
+  <meta name="theme-color" content="#5e35b1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="彩豆扑克" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="/icons/favicon-64.png" />
+  <link rel="stylesheet" href="style.css?v=4" />
+</head>
+<body>
+  <div id="app">
+    <header class="top-bar">
+      <h1>扑克牌游戏 <span class="net-badge">联机版</span></h1>
+      <div class="info">
+        <span>房间：<strong id="top-room">--</strong></span>
+        <span>彩豆总颗数：<strong id="pot">0</strong> 颗</span>
+        <span>当前彩豆：<strong id="current-bet">0</strong> 颗</span>
+        <span>轮次：<strong id="round">大厅</strong></span>
+        <span id="conn" class="conn">未连接</span>
+      </div>
+    </header>
+
+    <!-- ============ 登录 / 注册 ============ -->
+    <section id="auth-section" class="lobby" hidden>
+      <div class="lobby-card">
+        <h2>登录 / 注册</h2>
+        <div class="tabs">
+          <button id="tab-login" class="tab active" type="button">登录</button>
+          <button id="tab-register" class="tab" type="button">注册</button>
+        </div>
+        <div class="row">
+          <label for="input-phone">手机号</label>
+          <input id="input-phone" type="tel" inputmode="numeric" maxlength="11" placeholder="11 位手机号" />
+        </div>
+        <div class="row">
+          <label for="input-password">密码</label>
+          <input id="input-password" type="password" maxlength="32" placeholder="至少 6 位" />
+        </div>
+        <div class="row" id="row-nickname" hidden>
+          <label for="input-nick">昵称</label>
+          <input id="input-nick" type="text" maxlength="12" placeholder="牌桌上的名字" />
+        </div>
+        <button id="btn-auth" class="primary" type="button">登录</button>
+        <p class="hint" id="auth-hint">还没有账号？点上方「注册」，注册后会生成你专属的<b>玩家编码</b>。</p>
+      </div>
+    </section>
+
+    <!-- ============ 已登录：进入房间 ============ -->
+    <section id="join-section" class="lobby" hidden>
+      <div class="lobby-card">
+        <h2>进入房间</h2>
+        <div class="my-code">
+          我的玩家编码 <strong id="my-code">------</strong>
+          <span class="my-name" id="my-nick"></span>
+        </div>
+        <div class="row">
+          <label for="input-room">房间号</label>
+          <input id="input-room" type="text" maxlength="4" placeholder="留空则创建新房间" />
+        </div>
+        <button id="btn-enter" class="primary" type="button">创建房间并进入</button>
+        <p class="hint">房间号留空 → <b>创建新房间并直接进入牌桌等待</b>；填入好友的房间号 → 加入他的房间。进入后就在牌桌画面里点「准备」，凑不齐人可点「补满人机」让电脑补位，<b>2~4 人</b>全部准备后房主开始。</p>
+        <button id="btn-logout" class="link-btn" type="button">退出登录</button>
+      </div>
+    </section>
+
+    <!-- ============ 牌桌（同时承载房间等待与游戏对局） ============ -->
+    <main class="table" id="table" hidden>
+      <div class="center-area">
+        <!-- 大厅 / 结算阶段：房间控制面板 -->
+        <div class="room-panel" id="room-panel">
+          <div class="room-head">
+            <h2>房间 <span id="room-code">----</span></h2>
+            <button id="btn-leave" class="link-btn" type="button">离开房间</button>
+          </div>
+          <div class="invite">
+            <div class="invite-row">
+              <input id="invite-link" type="text" readonly />
+              <button id="btn-copy" type="button">复制链接</button>
+            </div>
+            <p class="hint" id="invite-hint">把上面的链接发给好友即可加入。</p>
+          </div>
+          <p class="lobby-msg" id="lobby-msg">等待玩家加入并准备…</p>
+          <div class="room-buttons">
+            <button id="btn-ready-lobby" class="primary" type="button">准备</button>
+            <button id="btn-start" class="primary" type="button" disabled>开始游戏</button>
+          </div>
+        </div>
+        <!-- 人机陪玩（大厅与结算阶段都可用） -->
+        <div class="bot-actions" id="bot-actions" hidden>
+          <span class="bot-title">🤖 人机陪玩</span>
+          <div class="bot-btns">
+            <button id="btn-add-bot" type="button">添加人机</button>
+            <button id="btn-fill-bot" type="button">补满人机</button>
+            <button id="btn-remove-bot" type="button">移除人机</button>
+          </div>
+          <p class="bot-hint" id="bot-hint">房主可点「添加人机 / 补满人机」让人机补上空座位，凑够 2 人即可开局。</p>
+        </div>
+        <!-- 游戏阶段：桌面癞子牌 -->
+        <div class="wild-area" id="wild" hidden></div>
+        <!-- 本局每一轮扔豆总额 -->
+        <div class="round-summary" id="round-summary" hidden></div>
+      </div>
+
+      <div class="player" id="player-0" data-pos="bottom">
+        <div class="player-info">
+          <span class="name">座位 1</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+      <div class="player" id="player-1" data-pos="right">
+        <div class="player-info">
+          <span class="name">座位 2</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+      <div class="player" id="player-2" data-pos="top">
+        <div class="player-info">
+          <span class="name">座位 3</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+      <div class="player" id="player-3" data-pos="left">
+        <div class="player-info">
+          <span class="name">座位 4</span>
+          <span class="seat-ready"></span>
+          <span class="balance">余额：<b>0</b> 颗</span>
+          <span class="bet">本局扔豆：<b>0</b> 颗</span>
+          <span class="round-bets"></span>
+          <span class="role"></span>
+          <span class="raise-tag"></span>
+          <span class="winner-badge">🏆 本局胜</span>
+        </div>
+        <div class="hand"></div>
+        <div class="score"></div>
+      </div>
+    </main>
+
+    <div class="message-area" id="message-area" hidden>
+      <p id="message">欢迎来到扑克牌游戏！</p>
+    </div>
+
+    <!-- PWA 安装引导 -->
+    <div id="pwa-install-bar" class="pwa-install-bar" hidden>
+      <span class="pwa-icon">🃏</span>
+      <span class="pwa-text">安装到主屏幕，像 App 一样打开</span>
+      <button id="btn-install" class="pwa-install-btn" type="button">安装</button>
+      <button id="btn-install-close" class="pwa-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <div id="pwa-guide" class="pwa-guide-overlay" hidden>
+      <div class="pwa-guide-content">
+        <h3>安装「彩豆扑克」到手机</h3>
+        <div id="pwa-guide-ios" hidden>
+          <p>1. 点击 Safari 底部工具栏的 <b>分享</b> 按钮 <span class="share-icon">⬆️</span></p>
+          <p>2. 上滑，找到并点击 <b>「添加到主屏幕」</b></p>
+          <p>3. 点击右上角 <b>添加</b>，桌面就会出现「彩豆扑克」图标</p>
+        </div>
+        <div id="pwa-guide-android" hidden>
+          <p>1. 点击浏览器菜单（三个点）或地址栏提示</p>
+          <p>2. 选择 <b>「安装应用」</b> 或 <b>「添加到主屏幕」</b></p>
+          <p>3. 返回桌面，点击「彩豆扑克」图标即可打开</p>
+        </div>
+        <div id="pwa-guide-other" hidden>
+          <p>请用浏览器菜单里的「添加到主屏幕」功能，把本页固定到桌面。</p>
+        </div>
+        <button id="btn-guide-close" class="primary" type="button">知道了</button>
+      </div>
+    </div>
+
+    <div class="controls" id="controls" hidden>
+      <button id="btn-new" class="primary" disabled type="button">开始下一局</button>
+      <button id="btn-ready" disabled type="button">准备</button>
+      <button id="btn-call" disabled type="button">跟（确认扔豆）</button>
+      <button id="btn-raise" disabled type="button">加颗</button>
+      <button id="btn-look" disabled type="button">看牌</button>
+      <button id="btn-fold" disabled type="button">弃牌</button>
+    </div>
+
+    <div class="rules">
+      <h2>联机玩法</h2>
+      <p><b>账号</b>：用手机号 + 密码注册，注册成功会生成一个<b>专属且不可重复的玩家编码</b>，登录后即可创建或加入房间。</p>
+      <p><b>开局</b>：一人创建房间，把邀请链接发给好友。进入后就在<b>牌桌画面</b>里操作：<b>2~4 人</b>即可开局，房间内<b>所有人都点「准备」</b>后，房主才能点「开始游戏」。</p>
+      <p><b>人机陪玩</b>：好友没凑齐时，房主可点<b>「添加人机」</b>（一次加一个）或<b>「补满人机」</b>（一次性把空座位全补齐），人机补上座位后<b>自动处于已准备状态</b>，房主即可开始游戏；点「移除人机」可全部清掉。真人加入时若座位被人机占满，会<b>自动顶掉一个人机</b>。</p>
+      <p><b>重进房间</b>：同一个账号再次进入同一房间会<b>回到原来的座位</b>，不会占两个座位；换设备重新登录也可以找回座位。</p>
+      <p><b>异地好友</b>：同网络用「局域网地址」；异地需做<b>内网穿透</b>。</p>
+      <h2>规则说明</h2>
+      <p>每人起始分 5000 颗，每局每人先下 10 颗底注。</p>
+      <p>开局抽出一张<b>癞子牌</b>放桌面，其点数即“百搭”：<b>手中与该点数相同的牌都变为癞子</b>，每局随机变换。</p>
+      <p>A=15分，2-10=面值，J=11，Q=12，K=13。每人 <b>5 张牌</b>（2 张暗牌 + 3 张明牌）。<b>所有人的 2 张暗牌游戏中都盖着</b>，第 7 轮结束后才一起翻开比大小。</p>
+      <p>开局发 2 暗 + 1 明 → 扔豆；轮完发第 4 张明牌再扔豆；轮完发第 5 张明牌再扔豆。之后还有<b>第 6、7 轮</b>扔豆（不再发牌）。</p>
+      <p><b>先手顺序</b>：第 3/4/5 轮比对应明牌，牌面大者先；<b>第 6、7 轮以第 5 张明牌分值比较，分值小者先</b>。</p>
+      <p><b>加颗规则</b>：先手设定豆数后，<b>后面玩家不可改豆，只能跟颗或弃牌</b>；<b>每轮扔豆底线 = 上一轮最高扔豆</b>。</p>
+      <p><b>看牌</b>：轮到自己时可点「看牌」，<b>自己的 2 张暗牌仅自己可见</b>，并标注「👁 已看牌」。服务器保证他人的暗牌永远不会下发给你。<b>看牌后，每轮你扔的彩豆是没看牌玩家的 2 倍</b>（最低彩豆、跟颗、加颗全部翻倍）；<b>但如果所有未弃牌的玩家都已看牌，则大家豆数相同</b>（全员看牌 = 等额）。</p>
+      <p><b>赢家税</b>：每局结束后，赢家扣除 <b>10 颗彩豆</b>。</p>
+      <p>计分：三条=三张和+30；四条=+60；五条=+120；都没有则 5 张相加。比大小先比牌型再比总颗，完全相同则按第 3→4→5 张明牌破平。</p>
+    </div>
+  </div>
+
+  <!-- PWA service worker 注册 -->
+  <script>
+    (function () {
+      'use strict';
+      var ua = navigator.userAgent;
+      var isIos = /iPad|iPhone|iPod/.test(ua);
+      var isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+      // 注册 Service Worker（仅在安全上下文 https/localhost）
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js')
+            .then(function (reg) { console.log('[PWA] SW registered:', reg.scope); })
+            .catch(function (err) { console.warn('[PWA] SW registration failed:', err); });
+        });
+      }
+
+      // 安装引导
+      var installBar = document.getElementById('pwa-install-bar');
+      var guide = document.getElementById('pwa-guide');
+      var deferredPrompt = null;
+
+      function show(element) { if (element) element.hidden = false; }
+      function hide(element) { if (element) element.hidden = true; }
+
+      function openGuide() {
+        hide(document.getElementById('pwa-guide-ios'));
+        hide(document.getElementById('pwa-guide-android'));
+        hide(document.getElementById('pwa-guide-other'));
+        if (isIos) show(document.getElementById('pwa-guide-ios'));
+        else if (/Android/.test(ua)) show(document.getElementById('pwa-guide-android'));
+        else show(document.getElementById('pwa-guide-other'));
+        show(guide);
+      }
+
+      // iOS 不能直接触发系统安装，必须显示手动教程
+      if (isIos && !isStandalone && installBar) {
+        show(installBar);
+      }
+
+      // 安卓/其它平台 2.5 秒后若还没收到系统安装提示，也显示手动安装入口
+      setTimeout(function () {
+        if (!isStandalone && installBar && installBar.hidden && !deferredPrompt) {
+          show(installBar);
+        }
+      }, 2500);
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installBar) show(installBar);
+      });
+
+      if (installBar) {
+        document.getElementById('btn-install').addEventListener('click', function () {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(function (choice) {
+              if (choice.outcome === 'accepted') hide(installBar);
+              deferredPrompt = null;
+            });
+          } else {
+            openGuide();
+          }
+        });
+        document.getElementById('btn-install-close').addEventListener('click', function () {
+          hide(installBar);
+          localStorage.setItem('pwa-install-closed', '1');
+        });
+      }
+
+      if (guide) {
+        document.getElementById('btn-guide-close').addEventListener('click', function () {
+          hide(guide);
+        });
+      }
+
+      // 如果用户之前关过，首次使用（登录后）再展示一次可安装提示
+      try {
+        if (localStorage.getItem('pwa-install-closed') === '1' && installBar) {
+          hide(installBar);
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <script src="game.js?v=4"></script>
+</body>
+</html>

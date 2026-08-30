@@ -1,0 +1,42 @@
+{
+  "name": "彩豆扑克 - 联机对战",
+  "short_name": "彩豆扑克",
+  "description": "联机扑克对战游戏，支持人机陪玩与好友开房",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#221c4e",
+  "theme_color": "#5e35b1",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"],
+  "screenshots": [
+    {
+      "src": "/card-back.png",
+      "sizes": "640x640",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "牌桌界面"
+    }
+  ]
+}

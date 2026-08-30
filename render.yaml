@@ -1,0 +1,16 @@
+# Render 一键部署配置（自动 HTTPS）
+# 用法：把本文件夹推送到 GitHub，在 Render 新建 Blueprint 选中该仓库即可。
+# 部署后访问分配的 .onrender.com 域名，已是 HTTPS，可正常安装 PWA。
+services:
+  - type: web
+    name: caidou-poker
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: "echo no-build"
+    startCommand: "node server.js"
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT 由 Render 自动注入，server.js 已支持 process.env.PORT

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="theme-color" content="#5e35b1" />
+  <meta name="description" content="彩豆扑克 - 联机对战 PWA，支持好友开房与人机陪玩" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>彩豆扑克 · 下载 / 安装</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="/icons/favicon-64.png" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
+    body {
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+      background: radial-gradient(circle at center, #2e225c 0%, #150f30 100%);
+      color: #f7f1e3;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 28px 18px 60px;
+      text-align: center;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .brand img {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 28px;
+      color: #e6c86e;
+      text-shadow: 0 2px 6px rgba(0,0,0,.35);
+    }
+    .brand p { margin: 4px 0 0; color: #b8c4cc; font-size: 14px; }
+    .tagline {
+      font-size: 18px;
+      color: #fff;
+      margin: 18px 0 24px;
+    }
+    .url-box {
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(230,200,110,.35);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 24px;
+    }
+    .url-box label {
+      display: block;
+      font-size: 13px;
+      color: #b8c4cc;
+      margin-bottom: 6px;
+    }
+    .url-box .url {
+      word-break: break-all;
+      font-size: 15px;
+      color: #8fd3ff;
+      font-weight: bold;
+    }
+    .url-box button {
+      margin-top: 10px;
+      background: #5e35b1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .note {
+      background: rgba(94, 53, 177, .18);
+      border: 1px dashed rgba(143, 211, 255, .35);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 13px;
+      color: #a9bcc9;
+      margin-bottom: 24px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 600px) {
+      .cards { grid-template-columns: 1fr; }
+      .brand { flex-direction: column; }
+    }
+    .card {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: left;
+    }
+    .card h3 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: #e6c86e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card ol {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 14px;
+      color: #dfe6e9;
+    }
+    .card li { margin-bottom: 8px; }
+    .card .tip {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      font-size: 12px;
+      color: #a9bcc9;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .actions a, .actions button {
+      display: inline-block;
+      background: linear-gradient(135deg, #7e57c2, #5e35b1);
+      color: #fff;
+      text-decoration: none;
+      border: none;
+      border-radius: 50px;
+      padding: 13px 28px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,.3);
+    }
+    .actions a.secondary, .actions button.secondary {
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.25);
+    }
+    .footer {
+      margin-top: 36px;
+      font-size: 12px;
+      color: #7f8c8d;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="brand">
+      <img src="/icons/icon-192.png" alt="彩豆扑克图标" />
+      <div>
+        <h1>彩豆扑克</h1>
+        <p>联机对战 · 好友开房 · 人机陪玩</p>
+      </div>
+    </div>
+
+    <p class="tagline">无需应用商店，安卓 / iPhone 都能像 App 一样安装到桌面</p>
+
+    <div class="url-box">
+      <label>用手机浏览器打开以下地址</label>
+      <div class="url" id="current-url">正在获取…</div>
+      <button id="copy-url" type="button">复制地址</button>
+    </div>
+
+    <div class="note">
+      本游戏采用 <b>PWA</b> 技术，不生成传统 .apk / .ipa 安装包。<br/>
+      安装后会像原生 App 一样出现在手机桌面，支持离线启动，进入房间即可联机对战。
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <h3><span>🤖</span> 安卓手机安装</h3>
+        <ol>
+          <li>用 Chrome / Edge / 自带浏览器打开上方地址。</li>
+          <li>点击浏览器弹出的「<b>安装应用</b>」提示，或点菜单 → 「添加到主屏幕」。</li>
+          <li>安装完成后，桌面出现「彩豆扑克」图标，点击即玩。</li>
+        </ol>
+        <p class="tip">如果没看到安装提示：点浏览器右上角 ⋮ → 「添加到主屏幕」。</p>
+      </div>
+      <div class="card">
+        <h3><span>🍎</span> iPhone 安装</h3>
+        <ol>
+          <li>用 <b>Safari</b> 打开上方地址。</li>
+          <li>点底部分享按钮 <span style="font-size:16px">⬆️</span>，上滑找到「<b>添加到主屏幕</b>」。</li>
+          <li>点右上角「添加」，桌面就会出现「彩豆扑克」图标。</li>
+        </ol>
+        <p class="tip">iOS 必须使用 Safari；其它浏览器无法正确触发安装。</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <a href="/">🎮 直接进入游戏</a>
+      <button class="secondary" id="install-from-landing" type="button">📲 安装到本设备</button>
+    </div>
+
+    <div class="footer">
+      <p>局域网测试：手机和电脑连接同一 Wi-Fi，用上面的地址访问。</p>
+      <p>异地联机：请将本服务器部署到公网，并提供 HTTPS 访问（PWA 最佳体验需要 HTTPS）。</p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var urlEl = document.getElementById('current-url');
+      var href = window.location.href.replace(/\?.*$/, '').replace(/\/download\.html$/, '/');
+      urlEl.textContent = href;
+
+      document.getElementById('copy-url').addEventListener('click', function () {
+        navigator.clipboard.writeText(href).then(function () {
+          alert('地址已复制，去手机浏览器里粘贴打开即可');
+        }, function () {
+          alert('复制失败，请手动复制：' + href);
+        });
+      });
+
+      document.getElementById('install-from-landing').addEventListener('click', function () {
+        var ua = navigator.userAgent;
+        var isIos = /iPad|iPhone|iPod/.test(ua);
+        if (isIos) {
+          alert('iPhone 请点 Safari 底部分享按钮，选择「添加到主屏幕」。');
+        } else if (/Android/.test(ua)) {
+          alert('安卓请点击浏览器菜单里的「添加到主屏幕」或等待安装提示。');
+        } else {
+          alert('请用手机浏览器打开本页后，按手机上的步骤安装到主屏幕。');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
