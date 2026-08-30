@@ -5,3 +5,5 @@ accounts.json
 *.bak
 *.bak.js
 64237523536499bb4e74cbebaf738e7a.png
+android/**/build/
+*.apk

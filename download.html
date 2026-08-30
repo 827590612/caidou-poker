@@ -181,8 +181,8 @@
     </div>
 
     <div class="note">
-      本游戏采用 <b>PWA</b> 技术，不生成传统 .apk / .ipa 安装包。<br/>
-      安装后会像原生 App 一样出现在手机桌面，支持离线启动，进入房间即可联机对战。
+      安卓用户可直接下载 <b>APK 安装包</b>（见下方按钮），安装即用；<br/>
+      iPhone 用户请使用 Safari 的「添加到主屏幕」安装（iOS 不支持侧载 APK）。
     </div>
 
     <div class="cards">
@@ -204,10 +204,21 @@
         </ol>
         <p class="tip">iOS 必须使用 Safari；其它浏览器无法正确触发安装。</p>
       </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h3><span>📦</span> 安卓 APK 直接安装（无需应用商店）</h3>
+        <ol>
+          <li>点下方「📦 下载安卓 APK」按钮，把 <b>app-release.apk</b> 下载到手机。</li>
+          <li>打开下载文件；若提示「禁止安装未知来源应用」，按提示允许本次安装即可。</li>
+          <li>安装完成，桌面出现「彩豆扑克」图标，点击即玩（需联网，连接 Render 服务器对战）。</li>
+        </ol>
+        <p class="tip">APK 由 GitHub Actions 自动编译并发布到 Release；每次推送代码会自动重新构建。</p>
+      </div>
     </div>
 
     <div class="actions">
       <a href="/">🎮 直接进入游戏</a>
+      <a class="secondary" href="https://github.com/827590612/caidou-poker/releases/latest/download/app-release.apk">📦 下载安卓 APK</a>
       <button class="secondary" id="install-from-landing" type="button">📲 安装到本设备</button>
     </div>
 
