@@ -1,19 +1,27 @@
 name: Build iOS IPA
 
+# 仅手动触发：在 GitHub 仓库 Actions 页面点「Run workflow」。
+# 必须由你配置好苹果签名密钥（见仓库 Settings → Secrets）后再手动运行；
+# 未配密钥时运行会在「导入签名证书」步骤明确报错，不会静默失败。
 on:
-  workflow_dispatch:      # 手动触发：在 GitHub 仓库 Actions 页面点「Run workflow」
-  # 如需每次推送自动构建，把下面的注释打开（前提：仓库已配置苹果签名 secrets）
-  # push:
-  #   branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build-ios:
     runs-on: macos-latest
-    # 缺少签名密钥时跳过，避免无效构建
-    if: ${{ secrets.IOS_CERTIFICATE != '' && secrets.IOS_PROVISIONING_PROFILE != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check signing secrets
+        env:
+          HAS_CERT: ${{ secrets.IOS_CERTIFICATE }}
+          HAS_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          if [ -z "$HAS_CERT" ] || [ -z "$HAS_PROFILE" ]; then
+            echo "::error::未配置苹果签名密钥。请在仓库 Settings → Secrets 添加 IOS_CERTIFICATE / IOS_CERT_PASSWORD / IOS_PROVISIONING_PROFILE / APPLE_TEAM_ID / PROVISIONING_PROFILE_NAME / KEYCHAIN_PASSWORD 后重试。"
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
