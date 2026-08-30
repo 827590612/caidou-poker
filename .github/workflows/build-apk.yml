@@ -44,8 +44,10 @@ jobs:
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag: apk
+          tag_name: apk
           name: 彩豆扑克 APK
           files: android/app/build/outputs/apk/release/app-release.apk
+          make_latest: true
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
