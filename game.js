@@ -45,6 +45,7 @@
     btnRemoveBot: document.getElementById('btn-remove-bot'),
 
     table: document.getElementById('table'),
+    topBar: document.getElementById('top-bar'),
     controls: document.getElementById('controls'),
     messageArea: document.getElementById('message-area'),
     message: document.getElementById('message'),
@@ -53,6 +54,10 @@
     round: document.getElementById('round'),
     topRoom: document.getElementById('top-room'),
     conn: document.getElementById('conn'),
+    connBadge: document.getElementById('conn-badge'),
+    rulesFloat: document.getElementById('btn-rules-float'),
+    rotateHint: document.getElementById('rotate-hint'),
+    rotateHintBtn: document.getElementById('btn-rotate-ok'),
     wild: document.getElementById('wild'),
     roundSummary: document.getElementById('round-summary'),
 
@@ -84,6 +89,17 @@
   let lastTurnKey = '';
   let authMode = 'login';
   let spectating = false;   // 是否为观战模式（不占座位、不可操作）
+  let topBarVisible = true;  // 顶栏当前是否可见；对局中隐藏顶栏时，连接状态改由右上角徽标显示
+
+  // —— SSE 连接健康守护（针对 iOS Safari 长连接易静默断连/不重连）——
+  let reconnecting = false;       // 正在重连 SSE，避免重复建连
+  let reconnectTimer = null;      // 退避重连定时器
+  let reconnectAttempts = 0;      // 重连尝试次数（用于退避）
+  let lastSseMsgTs = 0;           // 最近一次收到 SSE 消息的时间戳
+  let sseKeepAlive = null;        // 静默断连检测 + 轮询兜底定时器
+  let sseReconnectFn = null;      // 当前连接的正确重连函数（玩家 or 观战）
+  let rotateDismissed = false;    // 用户已点“竖屏也行”，本次会话内不再弹“请横屏”浮层
+  let autoRefreshTimer = null;    // 每 500ms 轻量刷新（仅拉状态 + 重渲染，不整页重载）
 
   // ---------- 存储 ----------
   function loadAccount() {
@@ -111,6 +127,8 @@
     try { sessionStorage.setItem('poker-room', JSON.stringify(s)); } catch (e) {}
   }
   function clearRoomSession() {
+    stopSseKeepAlive();
+    stopReconnect();
     roomSession = null;
     try { sessionStorage.removeItem('poker-room'); } catch (e) {}
   }
@@ -157,14 +175,61 @@
     }
   }
 
+  // 每 500ms 轻量刷新一次页面数据：仅重新拉取状态并重渲染，
+  // 不做整页 location.reload()（整页重载会打断 SSE 长连接、丢失交互状态、引发闪烁与服务器压力）。
+  function startAutoRefresh() {
+    if (autoRefreshTimer) return;
+    autoRefreshTimer = setInterval(() => {
+      if (spectating) { refreshSpectateState(); }
+      else if (roomSession) { refreshState(); }
+    }, 500);
+  }
+
+  async function refreshSpectateState() {
+    if (!spectating || !view || !view.room) return;
+    try {
+      const v = await api(`/api/state?room=${encodeURIComponent(view.room)}&spectate=1`);
+      view = v;
+      render();
+    } catch (e) { /* 观战轮询失败静默，依赖 SSE 兜底 */ }
+  }
+
+  // SSE 健康守护：检测静默断连、定时兜底轮询，确保 iOS 上机器人回合也能刷新
+  function startSseKeepAlive() {
+    stopSseKeepAlive();
+    sseKeepAlive = setInterval(() => {
+      if (!roomSession && !spectating) { stopSseKeepAlive(); return; }
+      const now = Date.now();
+      // 1) 连接已彻底关闭（CLOSED）：触发重连；CONNECTING 状态交给浏览器自身处理，避免打断在途连接
+      if (!sse || sse.readyState === EventSource.CLOSED) {
+        doReconnect();
+        return;
+      }
+      // 2) 连接还“开着”但很久没收到消息（iOS 静默挂起）：强制重连
+      if (now - lastSseMsgTs > 12000) {
+        reconnecting = true; try { sse.close(); } catch (e) {} if (sseReconnectFn) sseReconnectFn();
+        return;
+      }
+      // 3) 5 秒以上无消息：用轮询兜底刷新（不重建连接），保证机器人回合可见
+      if (now - lastSseMsgTs > 5000) {
+        refreshState();
+      }
+    }, 4000);
+  }
+  function stopSseKeepAlive() {
+    if (sseKeepAlive) { clearInterval(sseKeepAlive); sseKeepAlive = null; }
+  }
+
   function openStream() {
-    if (sse) { try { sse.close(); } catch (e) {} }
+    closeSse();
     const url = `/api/stream?room=${encodeURIComponent(roomSession.room)}&seat=${roomSession.seat}&seatToken=${encodeURIComponent(roomSession.seatToken)}`;
     sse = new EventSource(url);
-    sse.onopen = () => setConn('已连接', true);
+    sseReconnectFn = openStream;
+    sse.onopen = () => { reconnecting = false; reconnectAttempts = 0; lastSseMsgTs = Date.now(); setConn('已连接', true); };
     sse.onmessage = (ev) => {
       let data;
       try { data = JSON.parse(ev.data); } catch (e) { return; }
+      lastSseMsgTs = Date.now();
       if (data.kicked) {
         leaveRoomUI(data.reason === 'other'
           ? '你的账号已在其他位置进入本房间，此页面已退出。'
@@ -174,42 +239,85 @@
       view = data;
       render();
     };
-    sse.onerror = async () => {
-      setConn('连接中断，重连中…', false);
-      if (sse && sse.readyState === EventSource.CLOSED) {
-        try {
-          await api(`/api/state?room=${roomSession.room}&seat=${roomSession.seat}`);
-          openStream();
-        } catch (e) {
-          clearRoomSession();
-          showJoin();
-        }
-      }
-    };
+    sse.onerror = () => { doReconnect(); };
+    startSseKeepAlive();
   }
 
   function setConn(text, ok) {
-    els.conn.textContent = text;
-    els.conn.classList.toggle('ok', !!ok);
-    els.conn.classList.toggle('bad', !ok);
+    if (els.conn) {
+      els.conn.textContent = text;
+      els.conn.classList.toggle('ok', !!ok);
+      els.conn.classList.toggle('bad', !ok);
+    }
+    // 顶栏隐藏（对局中）时，连接状态同步到右上角固定徽标；顶栏可见时不显示徽标，避免重复
+    if (els.connBadge) {
+      els.connBadge.textContent = text;
+      els.connBadge.classList.toggle('ok', !!ok);
+      els.connBadge.classList.toggle('bad', !ok);
+      els.connBadge.hidden = topBarVisible;
+    }
+  }
+
+  function closeSse() {
+    if (sse) { try { sse.close(); } catch (e) {} sse = null; }
+  }
+
+  // 统一重连入口：带退避，避免重连风暴（尤其 iOS / 隧道抖动时反复 onerror 会狂建连接）
+  function stopReconnect() {
+    reconnecting = false;
+    reconnectAttempts = 0;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  }
+
+  function doReconnect() {
+    if (reconnecting || !sseReconnectFn) return;
+    reconnecting = true;
+    reconnectAttempts++;
+    setConn('连接中断，重连中…', false);
+    const delay = Math.min(8000, 400 * reconnectAttempts);  // 退避递增，最多 8s
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      reconnecting = false;            // 放行下一轮重连
+      if (sseReconnectFn) sseReconnectFn();
+    }, delay);
+  }
+
+  // 进入房间时尽量把手机锁成横屏全屏：仅触屏设备尝试（安卓 Chrome 支持；
+  // iOS 既无全屏 API 也无 orientation.lock，由“请横屏”浮层引导，这里直接跳过）
+  function tryLockOrientation() {
+    try {
+      const coarse = window.matchMedia('(pointer: coarse)').matches;
+      const small = window.matchMedia('(max-width: 1024px)').matches;
+      if (!(coarse && small)) return;
+      const doc = document.documentElement;
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        const fs = doc.requestFullscreen || doc.webkitRequestFullscreen || doc.webkitRequestFullScreen;
+        if (fs) {
+          Promise.resolve(fs.call(doc)).then(function () {
+            screen.orientation.lock('landscape').catch(function () {});
+          }).catch(function () {});
+        }
+      }
+    } catch (e) {}
   }
 
   // 观战者通道：与玩家 SSE 共用服务器推送，但服务端以虚拟座位 -1 下发隐藏暗牌、无操作权限的只读视图
   function openSpectateStream(room, token) {
-    if (sse) { try { sse.close(); } catch (e) {} }
+    closeSse();
     const url = `/api/stream?room=${encodeURIComponent(room)}&spectate=1&token=${encodeURIComponent(token || '')}`;
     sse = new EventSource(url);
-    sse.onopen = () => setConn('观战中', true);
+    sseReconnectFn = () => openSpectateStream(room, token);
+    sse.onopen = () => { reconnecting = false; lastSseMsgTs = Date.now(); setConn('观战中', true); };
     sse.onmessage = (ev) => {
       let data;
       try { data = JSON.parse(ev.data); } catch (e) { return; }
+      lastSseMsgTs = Date.now();
       view = data;
       render();
     };
-    sse.onerror = () => {
-      // EventSource 会自动按 retry:2000 重连，这里仅更新连接状态
-      if (sse && sse.readyState === EventSource.CONNECTING) setConn('观战连接中断，重连中…', false);
-    };
+    sse.onerror = () => { doReconnect(); };
+    startSseKeepAlive();
   }
 
   async function spectateRoom() {
@@ -226,6 +334,7 @@
       showRoom();
       showSpectateBanner();
       openSpectateStream(roomInput, account.token);
+      tryLockOrientation();   // 进房即尝试锁横屏（安卓全屏+横屏；iOS 忽略）
     } catch (e) {
       alert('观战失败：' + e.message);
     } finally {
@@ -234,8 +343,8 @@
   }
 
   function exitSpectate() {
-    if (sse) { try { sse.close(); } catch (e) {} }
-    sse = null;
+    closeSse();
+    stopReconnect();
     spectating = false;
     view = null;
     els.spectateBanner.hidden = true;
@@ -265,10 +374,8 @@
     els.wild.innerHTML = '';
     if (!view.wildCard) return;
     const { rank, suit } = view.wildCard;
-    const label = document.createElement('div');
-    label.className = 'wild-label';
-    label.textContent = `桌面癞子牌：手中 ${rank} 为百搭（每局随机变换）`;
-    els.wild.appendChild(label);
+    // 去掉原“桌面癞子牌：手中 X 为百搭（每局随机变换）”说明文字，
+    // 只保留中央大牌面 + 「癞子」角标，画面更干净（用户要求不显示该说明）。
     const isRed = suit === '♥' || suit === '♦';
     const div = document.createElement('div');
     div.className = `card ${isRed ? 'red' : 'black'} wild`;
@@ -489,6 +596,7 @@
   }
 
   function render() {
+    try {
     if (!view) return;
 
     // 调试：方便在浏览器控制台确认收到的人数与人机状态
@@ -502,7 +610,9 @@
     els.round.textContent = view.roundName;
     els.topRoom.textContent = view.room || '--';
 
-    // 本局「每一轮扔豆总额」面板（游戏中显示，大厅隐藏）
+    // 本局「每一轮扔豆总额」面板（游戏中显示，大厅隐藏）。
+    // 顶栏在对局中会隐藏，这里把「房间 / 轮次 / 底池 / 当前豆」一并搬到牌桌中央状态条，
+    // 做到“只保留游戏桌面”的同时信息不丢。
     const rbTotals = view.roundBets || [0, 0, 0, 0, 0];
     const rLabels = view.roundLabels || ['第3轮', '第4轮', '第5轮', '第6轮', '第7轮'];
     const inGame = view.gameRunning || view.phase === 'result' || view.phase === 'showdown' || view.phase === 'reveal';
@@ -513,7 +623,9 @@
           seg.push(`${rLabels[r]} ${rbTotals[r] || 0} 颗`);
         }
       }
-      els.roundSummary.textContent = '每轮扔豆：' + (seg.length ? seg.join(' · ') : '0 颗');
+      let txt = `房间 ${view.room || '--'} ｜ ${view.roundName} ｜ 底池 ${view.pot} 颗 ｜ 当前豆 ${view.currentBet} 颗`;
+      txt += `\n每轮扔豆：${seg.length ? seg.join(' · ') : '0 颗'}`;
+      els.roundSummary.textContent = txt;
       els.roundSummary.hidden = false;
     } else if (els.roundSummary) {
       els.roundSummary.hidden = true;
@@ -525,8 +637,20 @@
     // 进入房间后牌桌画面常驻；中央面板在大厅显示房间控制，游戏中显示癞子牌
     els.joinSection.hidden = true;
     els.table.hidden = false;
+    // “请横屏”浮层显隐由 updateRotateHint() 统一裁决（见下），避免 CSS 媒体查询
+    // 在部分机型横屏下失效应而遮挡大厅/开始按钮，导致进不去游戏。
+    updateRotateHint();
 
     const lobby = view.phase === 'lobby';
+    // 进入游戏（对局中或结算）后只保留牌桌：隐藏顶栏与消息栏等杂项，
+    // 关键信息已搬进牌桌中央状态条（roundSummary），操作按钮固定在屏幕底部。
+    const inPlay = view.gameRunning && !lobby;
+    const cleanTable = inPlay || view.phase === 'result';
+    if (els.topBar) els.topBar.hidden = cleanTable;
+    topBarVisible = !cleanTable;                            // 供 setConn 决定是否用右上角徽标显示连接状态
+    if (els.connBadge) els.connBadge.hidden = !cleanTable;  // 顶栏隐藏时由右上角徽标显示连接状态
+    // 进入游戏（顶栏隐藏）后，用左上角悬浮「玩法」按钮开关规则弹窗，替代顶栏的「玩法」入口
+    if (els.rulesFloat) els.rulesFloat.hidden = !cleanTable;
 
     if (spectating) {
       // 观战模式：纯只读，不显示任何可操作面板（房间控制 / 人机陪玩 / 操作按钮）
@@ -539,8 +663,9 @@
       els.roomPanel.hidden = !lobby;
       els.wild.hidden = lobby;
       els.botActions.hidden = !(lobby || view.phase === 'result');
-      els.messageArea.hidden = lobby;   // 大厅用中央 lobby-msg
-      els.controls.hidden = lobby;      // 大厅用中央「准备 / 开始」
+      // 对局进行中隐藏消息栏（提示已并入牌桌中央状态条）；大厅/结算仍显示
+      els.messageArea.hidden = lobby || inPlay;
+      els.controls.hidden = lobby;      // 大厅用中央「准备 / 开始」；对局/结算时底部固定栏可见
     }
 
     if (lobby) {
@@ -570,6 +695,10 @@
       }
     }
     showMessage(msg);
+    // 对局进行中消息栏已隐藏，把“轮到你了…”提示并入牌桌中央状态条，确保玩家看得见该操作
+    if (inPlay && els.roundSummary && !els.roundSummary.hidden && msg) {
+      els.roundSummary.textContent += '\n' + msg;
+    }
 
     // 结算阶段：显示准备 / 开始下一局，同时允许房主调整人机
     const resultPhase = (view.phase === 'result');
@@ -590,27 +719,39 @@
 
     const key = `${view.room}-${view.phase}-${view.waitingFor}`;
     if (key !== lastTurnKey) { lastTurnKey = key; pendingRaise = 0; }
+
+    // 对局进行中（下注/发牌/亮牌等）自动隐藏 PWA 安装引导条，
+    // 避免它（即便已置为点击穿透）在任意布局下遮挡操作按钮，导致「卡住」。
+    const pwaBar = document.getElementById('pwa-install-bar');
+    if (pwaBar) pwaBar.hidden = !!view.gameRunning;
+    } catch (err) {
+      console.error('[render 异常，已跳过本次刷新]', err);
+    }
   }
 
   // ---------- 界面切换 ----------
   function showAuth(msg) {
+    topBarVisible = true;   // 登录页顶栏可见，连接状态走顶栏，不显示右上角徽标
     els.authSection.hidden = false;
     els.joinSection.hidden = true;
     els.table.hidden = true;
     els.controls.hidden = true;
     els.messageArea.hidden = true;
     els.botActions.hidden = true;
+    if (els.rotateHint) els.rotateHint.hidden = true;
     if (msg) els.authHint.textContent = msg;
     setConn('未登录', false);
   }
 
   function showJoin() {
+    topBarVisible = true;   // 进入房间页顶栏可见，连接状态走顶栏，不显示右上角徽标
     els.authSection.hidden = true;
     els.joinSection.hidden = false;
     els.table.hidden = true;
     els.controls.hidden = true;
     els.messageArea.hidden = true;
     els.botActions.hidden = true;
+    if (els.rotateHint) els.rotateHint.hidden = true;
     if (account) {
       els.myCode.textContent = account.code;
       els.myNick.textContent = account.nickname ? `（${account.nickname}）` : '';
@@ -690,14 +831,23 @@
     const roomInput = (els.inputRoom.value || '').trim().toUpperCase();
     els.btnEnter.disabled = true;
     try {
-      const data = roomInput
-        ? await api('/api/join', { room: roomInput, token: account.token })
-        : await api('/api/create', { token: account.token });
-      saveRoomSession({ room: data.room, seat: data.seat, seatToken: data.seatToken });
-      history.replaceState(null, '', `?room=${encodeURIComponent(data.room)}`);
-      showRoom();
-      await refreshInviteLink();
-      openStream();
+    const data = roomInput
+      ? await api('/api/join', { room: roomInput, token: account.token })
+      : await api('/api/create', { token: account.token });
+    saveRoomSession({ room: data.room, seat: data.seat, seatToken: data.seatToken });
+    history.replaceState(null, '', `?room=${encodeURIComponent(data.room)}`);
+    showRoom();
+    // 关键修复：先立即拉一次完整状态并渲染，确保“进入房间”后大厅/牌桌立刻出现，
+    // 不再依赖 SSE 首帧；否则一旦后续步骤（如复制邀请链接）抛错，openStream 不执行、
+    // 牌桌永远空白，表现为“进入房间却进不去 / 卡在空桌面”。
+    try {
+      const v = await api(`/api/state?room=${encodeURIComponent(data.room)}&seat=${data.seat}`);
+      view = v;
+      render();
+    } catch (e) { /* SSE 仍会兜底渲染，这里静默即可 */ }
+    openStream();            // 建立游戏实时推送（断线重连 / 轮询兜底已在内部处理）
+    tryLockOrientation();    // 进房即尝试锁横屏（安卓全屏+横屏；iOS 忽略）
+    refreshInviteLink();     // 复制邀请链接：失败不影响进房（函数内部已 try-catch）
     } catch (e) {
       alert(e.message);
     } finally {
@@ -758,6 +908,16 @@
   els.btnSpectate.addEventListener('click', spectateRoom);
   els.btnExitSpectate.addEventListener('click', exitSpectate);
 
+  // 对局中（顶栏隐藏）用左上角悬浮「玩法」按钮开关规则弹窗：点一下打开，再点一下关闭
+  if (els.rulesFloat) {
+    els.rulesFloat.addEventListener('click', function () {
+      const r = document.getElementById('rules');
+      if (!r) return;
+      if (r.classList.contains('open')) r.classList.remove('open');
+      else r.classList.add('open');
+    });
+  }
+
   els.btnCopy.addEventListener('click', async () => {
     const text = els.inviteLink.value;
     try {
@@ -794,11 +954,38 @@
   }
 
   // ---------- 初始化 ----------
+  // 关闭“请横屏”浮层：点按钮或点浮层任意处都生效，本次会话内不再弹
+  function dismissRotateHint() {
+    rotateDismissed = true;
+    if (els.rotateHint) els.rotateHint.hidden = true;
+  }
+
+  // 统一裁决“请横屏”浮层是否显示：
+  // - 仅在对局进行中（非大厅、非观战）才提示，大厅/结算阶段的准备/开始按钮绝不被遮挡；
+  // - 用 innerWidth/innerHeight 实际宽高比判断竖屏（比 CSS orientation 媒体查询更可靠，
+  //   规避部分机型横屏下媒体查询失效应、浮层仍盖住入口的问题）；
+  //   横屏（宽 > 高）一律隐藏，任何方向都能正常进游戏。
+  function updateRotateHint() {
+    if (!els.rotateHint) return;
+    const portrait = window.innerWidth <= window.innerHeight;
+    const inPlay = view && view.phase !== 'lobby' && !spectating;
+    const show = portrait && inPlay && !rotateDismissed;
+    els.rotateHint.hidden = !show;
+  }
+
   (function init() {
     const params = new URLSearchParams(location.search);
     const roomParam = params.get('room');
     if (roomParam) els.inputRoom.value = roomParam.toUpperCase();
     syncEnterLabel();
+
+    if (els.rotateHintBtn) els.rotateHintBtn.addEventListener('click', dismissRotateHint);
+    if (els.rotateHint) els.rotateHint.addEventListener('click', dismissRotateHint);
+    // 旋转 / 尺寸变化时即时裁决浮层显隐，避免横竖切换后浮层状态不同步
+    window.addEventListener('orientationchange', updateRotateHint);
+    window.addEventListener('resize', updateRotateHint);
+
+    startAutoRefresh();   // 每 500ms 轻量刷新页面数据（拉状态+重渲染，不整页重载）
 
     const savedAccount = loadAccount();
     if (!savedAccount) { showAuth(); return; }

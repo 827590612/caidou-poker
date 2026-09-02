@@ -18,22 +18,30 @@
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
+  height: 100vh;          /* 回退 */
+  height: 100dvh;         /* 移动端动态视口高度：避开地址栏造成的高度跳动，真正铺满屏幕 */
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   background: radial-gradient(circle at center, var(--felt) 0%, var(--felt-dark) 100%);
   color: var(--white);
+  overflow-x: hidden;     /* 锁定横向，不出现横向滚动 */
+  overscroll-behavior: none;  /* 关闭下拉刷新 / 橡皮筋回弹 */
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;  /* 去掉双击缩放与 300ms 延迟，更像原生 App */
 }
 
 #app {
-  max-width: 1200px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 16px;
-  min-height: 100%;
+  padding: 14px 22px;
+  height: 100dvh;            /* 锁死视口高度，配合 overflow:hidden 实现整页不滚动 */
+  max-height: 100dvh;
+  overflow: hidden;          /* 整页禁止滚动：游戏画面铺满手机屏幕 */
   display: flex;
   flex-direction: column;
 }
 
 .top-bar {
+  flex: 0 0 auto;            /* 顶栏固定高度，不随内容伸展 */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -42,6 +50,17 @@ html, body {
   border: 1px solid var(--gold-dark);
   border-radius: 12px;
   margin-bottom: 16px;
+}
+
+.topbar-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dark) 100%);
+  color: #2c3e50;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 5px var(--shadow);
 }
 
 .top-bar h1 {
@@ -64,21 +83,24 @@ html, body {
 
 .table {
   position: relative;
-  flex: 1;
-  min-height: 360px;
+  flex: 1 1 auto;           /* 吃掉顶栏/操作区之外的全部剩余空间，铺满屏幕 */
+  width: 100%;
+  min-height: 0;            /* 关键：允许在被压缩时不撑出父容器，配合 #app overflow:hidden 杜绝滚动 */
+  overflow: hidden;         /* 牌桌内部如需则自行滚动，不向外溢出造成整页滚动 */
   background: rgba(0, 0, 0, 0.15);
   border: 2px solid var(--gold-dark);
-  border-radius: 50% / 24px;
+  border-radius: 48px;
   box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.4);
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 0.9fr 3.2fr 0.9fr;
+  grid-template-rows: 0.9fr 1.5fr 0.9fr;
   grid-template-areas:
-    ". top ."
-    "left center right"
-    ". bottom .";
-  padding: 24px;
-  gap: 16px;
+    "top    .     right"
+    "  .   center   .  "
+    "left   .    bottom";
+  /* 底部留白给固定操作栏（见 .controls）让位，避免底部座位玩家被盖住（含刘海屏安全区） */
+  padding: 24px 24px 110px;
+  gap: 12px;
 }
 
 .center-area {
@@ -86,14 +108,21 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* safe center：内容超过格子高度时不顶掉顶部、且可被滚动到（修正 flex 居中溢出裁切 bug，
+     否则大厅的「准备 / 开始游戏」按钮在矮屏下会被裁且滚不到，表现为“玩家卡死”） */
+  justify-content: safe center;
   gap: 12px;
   min-width: 0;
+  min-height: 0;        /* 允许在网格中被压缩，配合 overflow 防止内容溢出盖住角落玩家 */
+  overflow: auto;       /* 内容超高时可内部滚动，不挤压/遮挡其它座位 */
 }
 
 .room-panel {
   width: 100%;
   max-width: 380px;
+  max-height: 100%;          /* 矮屏下整体不撑破中央格，内部自行滚动 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--gold-dark);
   border-radius: 14px;
@@ -135,9 +164,9 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 16px;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
   transition: box-shadow 0.2s;
@@ -233,14 +262,15 @@ html, body {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px 14px;
-  font-size: 13px;
+  gap: 1px 5px;
+  font-size: 9px;
+  line-height: 1.3;
 }
 
 .player-info .name {
   font-weight: bold;
   color: var(--gold);
-  font-size: 15px;
+  font-size: 11px;
 }
 
 .player-info .role {
@@ -292,6 +322,18 @@ html, body {
   gap: 8px;
   justify-content: center;
   flex-wrap: wrap;
+}
+
+/* 玩家手牌继续缩小：把桌面中央（癞子牌 / 底池 / 每轮扔豆）让出来，更醒目 */
+.player .hand .card {
+  width: 36px;
+  height: 52px;
+}
+.player .hand .card .suit {
+  font-size: 18px;
+}
+.player .hand .card .corner {
+  font-size: 8px;
 }
 
 .card {
@@ -403,17 +445,18 @@ html, body {
   gap: 8px;
 }
 
-.wild-area .wild-label {
-  font-size: 13px;
-  color: var(--gold);
-  font-weight: bold;
-  text-align: center;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-}
-
 .card.wild {
+  width: 88px;
+  height: 126px;
   background: var(--card-bg);
   border: 2px dashed var(--gold);
+  box-shadow: 0 0 24px rgba(230, 200, 110, 0.45), 0 4px 12px var(--shadow);
+}
+.card.wild .suit {
+  font-size: 46px;
+}
+.card.wild .corner {
+  font-size: 16px;
 }
 
 .card.wild .wild-badge {
@@ -446,6 +489,7 @@ html, body {
 }
 
 .message-area {
+  flex: 0 0 auto;           /* 消息条固定高度，不挤压牌桌 */
   margin: 14px 0;
   padding: 12px 18px;
   background: rgba(0, 0, 0, 0.25);
@@ -459,12 +503,38 @@ html, body {
   margin: 0;
 }
 
+/* 操作栏：固定贴底浮层，永远盖在牌桌之上。这样即使整页 overflow:hidden、
+   牌桌铺满全屏，真人“扔豆/跟/弃牌/看牌”按钮也始终在屏幕底部、点得到，
+   不会被裁切到可视区之外（这是“玩家点不到扔豆”的根因）。 */
 .controls {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
-  margin-bottom: 16px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  margin: 0;
+  background: rgba(20, 14, 36, 0.92);
+  border-top: 1px solid var(--gold-dark);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* 关键：display:flex 会覆盖 [hidden] 的 UA display:none，必须显式置 none，
+   否则大厅/结算阶段隐藏操作栏失效（与之前 rotate-hint 同一类坑） */
+.controls[hidden] {
+  display: none !important;
+}
+
+.controls button {
+  flex: 1 1 auto;
+  min-width: 84px;
+  font-size: 15px;
+  padding: 12px 10px;
 }
 
 button {
@@ -506,12 +576,46 @@ button.pulse:not(:disabled) {
   animation: readyPulse 1.6s ease-out infinite;
 }
 
+/* 登录 / 加入页：若内容超出则内部滚动，保持整页不滚动 */
+.lobby {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 玩法说明：默认隐藏，改为弹窗查看，避免撑出页面滚动 */
 .rules {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
-  padding: 14px 18px;
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(0, 0, 0, 0.94);
+  padding: 60px 18px 32px;
   font-size: 13px;
   line-height: 1.7;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rules.open {
+  display: block;
+}
+
+.rules-close {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 2;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dark) 100%);
+  color: #2c3e50;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px var(--shadow);
 }
 
 .rules h2 {
@@ -540,9 +644,146 @@ button.pulse:not(:disabled) {
     width: 55px;
     height: 80px;
   }
+  /* 移动端玩家手牌进一步缩小，中央桌面更宽裕 */
+  .player .hand .card {
+    width: 32px;
+    height: 46px;
+  }
+  .player .hand .card .suit {
+    font-size: 16px;
+  }
 
   .card .suit {
     font-size: 28px;
+  }
+  /* 移动端癞子牌：保持中央焦点但适配小屏 */
+  .wild-area .card.wild {
+    width: 64px;
+    height: 92px;
+  }
+  .wild-area .card.wild .suit {
+    font-size: 34px;
+  }
+}
+
+/* 宽屏 / 横屏：放大牌面，充分利用左右空间 */
+@media (min-width: 1400px) {
+  .table {
+    min-height: 0;           /* 交给 flex 铺满，不再强制最小高度 */
+  }
+  .card {
+    width: 86px;
+    height: 122px;
+  }
+  .card .suit {
+    font-size: 44px;
+  }
+  .card .corner {
+    font-size: 16px;
+  }
+}
+
+/* 手机横屏：压缩到一屏内，四向铺开充分利用横向空间 */
+@media (orientation: landscape) and (max-height: 600px) {
+  #app {
+    padding: 8px 14px;
+  }
+  .top-bar {
+    padding: 8px 14px;
+    margin-bottom: 8px;
+  }
+  .top-bar .info {
+    gap: 12px;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+  .message-area {
+    margin: 8px 0;
+    min-height: 40px;
+    padding: 10px 14px;
+  }
+  .controls {
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+  .rules {
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .table {
+    min-height: 0;           /* 交给 flex 铺满，不再强制最小高度 */
+    grid-template-columns: 0.85fr 3.3fr 0.85fr;
+    grid-template-rows: 0.8fr 1.6fr 0.8fr;
+    grid-template-areas:
+      "top    .     right"
+      "  .   center   .  "
+      "left   .    bottom";
+    border-radius: 32px;
+    padding: 14px;
+    gap: 10px;
+  }
+  .player {
+    padding: 8px;
+    gap: 6px;
+  }
+  .player-info {
+    font-size: 12px;
+    gap: 6px 10px;
+  }
+  .card {
+    width: 54px;
+    height: 76px;
+  }
+  /* 横屏矮屏：玩家手牌最小，中央桌面最大化 */
+  .player .hand .card {
+    width: 30px;
+    height: 44px;
+  }
+  .player .hand .card .suit {
+    font-size: 15px;
+  }
+  .card .suit {
+    font-size: 26px;
+  }
+  /* 横屏矮屏癞子牌：保持中央焦点但因空间紧凑稍缩 */
+  .wild-area .card.wild {
+    width: 72px;
+    height: 104px;
+  }
+  .wild-area .card.wild .suit {
+    font-size: 38px;
+  }
+  .card .corner {
+    font-size: 12px;
+  }
+  /* 横屏矮屏：压缩大厅面板，尽量把「准备 / 开始游戏」收进一屏，减少内部滚动 */
+  .room-panel {
+    padding: 10px 12px;
+  }
+  .room-panel h2 {
+    font-size: 14px;
+  }
+  .room-panel .room-head {
+    margin-bottom: 6px;
+  }
+  .room-panel .lobby-msg {
+    margin: 0 0 8px;
+    min-height: 16px;
+    font-size: 12px;
+  }
+  .invite {
+    margin-bottom: 8px;
+  }
+  .room-buttons button {
+    padding: 8px 6px;
+    font-size: 13px;
+  }
+  .bot-actions {
+    padding: 8px 10px;
+  }
+  .bot-hint {
+    font-size: 11px;
   }
 }
 
@@ -662,6 +903,43 @@ button.pulse:not(:disabled) {
   background: rgba(231, 76, 60, 0.22);
   color: #ff9b94;
 }
+
+/* 对局中顶栏隐藏，连接状态改由固定在右上角的小徽标持续显示 */
+.conn-badge {
+  position: fixed;
+  top: calc(8px + env(safe-area-inset-top));
+  right: 10px;
+  z-index: 70;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ff8a80;
+  pointer-events: none;
+}
+.conn-badge.ok { color: #8bf0a5; border-color: rgba(139, 240, 165, 0.4); }
+.conn-badge.bad { color: #ff8a80; border-color: rgba(255, 138, 128, 0.5); }
+
+/* 对局中（顶栏隐藏）时悬浮在左上角的「玩法」按钮：点开/关闭规则弹窗 */
+.rules-float-btn {
+  position: fixed;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 10px;
+  z-index: 70;
+  padding: 5px 13px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--gold-dark);
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 6px var(--shadow);
+}
+.rules-float-btn:active { transform: scale(0.96); }
+.rules-float-btn[hidden] { display: none !important; }
 
 .lobby {
   display: flex;
@@ -835,6 +1113,9 @@ button.pulse:not(:disabled) {
 .bot-actions {
   width: 100%;
   max-width: 380px;
+  max-height: 100%;          /* 与 room-panel 一致：矮屏下内部滚动，不被中央格裁切 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   margin: 0;
   padding: 10px 12px;
   border-radius: 10px;
@@ -894,10 +1175,17 @@ button.pulse:not(:disabled) {
 /* ============ PWA 安装引导 ============ */
 .pwa-install-bar {
   position: fixed;
-  bottom: 16px;
+  /* 关键修复②：原先固定在底部居中，正好压住所有游戏操作按钮
+     （大厅的 准备/开始、对局中的 跟/加/看/弃），导致点击被拦截、游戏「卡住」。
+     改到顶部，彻底避开底部操作区。 */
+  top: 12px;
+  bottom: auto;
   left: 50%;
   transform: translateX(-50%);
   z-index: 2000;
+  /* 关键修复①：安装引导条是「非模态」横幅，绝不能拦截下方游戏按钮的点击。
+     容器整体置为点击穿透，仅保留自身按钮可点（见下方 pointer-events:auto）。 */
+  pointer-events: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -924,6 +1212,7 @@ button.pulse:not(:disabled) {
 }
 
 .pwa-install-bar .pwa-install-btn {
+  pointer-events: auto;
   background: linear-gradient(135deg, #7e57c2, #5e35b1);
   color: #fff;
   border: none;
@@ -940,6 +1229,7 @@ button.pulse:not(:disabled) {
 }
 
 .pwa-install-bar .pwa-close {
+  pointer-events: auto;
   background: transparent;
   border: none;
   color: #b8c4cc;
@@ -947,6 +1237,73 @@ button.pulse:not(:disabled) {
   line-height: 1;
   cursor: pointer;
   padding: 0 4px;
+}
+
+/* ============ 竖屏提示：手机竖着时盖一层“请横屏”，引导锁成横屏 ============ */
+.rotate-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #1b4d3e 0%, #0c1f1a 100%);
+  text-align: center;
+  padding: 24px;
+}
+/* 关键：基础规则写了 display:flex，会压过 [hidden] 的 UA display:none，
+   导致 hidden 失效、浮层在竖屏常驻遮挡操作。这里强制让 hidden 生效。 */
+.rotate-hint[hidden] { display: none !important; }
+.rotate-hint-inner { max-width: 320px; }
+.rotate-hint .rotate-icon {
+  width: 46px;
+  height: 78px;
+  border: 3px solid var(--gold);
+  border-radius: 10px;
+  margin: 0 auto 18px;
+  position: relative;
+  animation: rotateHint 2.2s ease-in-out infinite;
+}
+.rotate-hint .rotate-icon::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 3px;
+  background: var(--gold);
+  border-radius: 2px;
+}
+@keyframes rotateHint {
+  0%, 100% { transform: rotate(-90deg); }
+  50% { transform: rotate(0deg); }
+}
+.rotate-hint p {
+  margin: 8px 0 0;
+  font-size: 18px;
+  color: var(--gold);
+}
+.rotate-hint .rotate-sub {
+  font-size: 13px;
+  color: #b8c4cc;
+}
+.rotate-ok-btn {
+  margin-top: 20px;
+  padding: 11px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0c1f1a;
+  background: var(--gold);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.rotate-ok-btn:active { transform: scale(0.96); }
+/* 仅在窄屏竖屏时显示“请横屏”；宽屏 / 横屏自动隐藏 */
+@media (min-width: 900px), (orientation: landscape) {
+  .rotate-hint { display: none !important; }
 }
 
 .pwa-guide-overlay {
@@ -998,13 +1355,13 @@ button.pulse:not(:disabled) {
 /* ============ 每一轮扔豆数量 ============ */
 .round-bets {
   display: block;
-  margin-top: 3px;
-  font-size: 11px;
-  line-height: 1.4;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.35;
   color: #ffd479;
   background: rgba(0, 0, 0, 0.28);
   border-radius: 6px;
-  padding: 3px 7px;
+  padding: 2px 6px;
 }
 
 .round-summary {
@@ -1015,6 +1372,8 @@ button.pulse:not(:disabled) {
   border: 1px solid rgba(230, 200, 110, 0.35);
   color: #f6e3a8;
   font-size: 13px;
+  line-height: 1.6;
   text-align: center;
-  max-width: 420px;
+  white-space: pre-line;     /* 支持 \n 换行，单行显示房间/轮次/底池，下一行显示扔豆与提示 */
+  max-width: 560px;
 }

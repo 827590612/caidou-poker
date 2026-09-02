@@ -375,20 +375,17 @@ function removePlayer(room, seat) {
 function getBetLeaderSeat(room, cardIndex, smallestFirst) {
   const active = seated(room).filter(p => !p.folded);
   if (active.length === 0) return 0;
-  if (smallestFirst) {
-    let leader = active[0];
-    let leaderScore = SCORE_MAP[active[0].hand[cardIndex].rank];
-    for (const p of active) {
-      const s = SCORE_MAP[p.hand[cardIndex].rank];
-      if (s < leaderScore) { leader = p; leaderScore = s; }
-    }
-    return leader.id;
-  }
+  // 以「明牌点数」定先手：最大者先说（轮 1~3）/ 最小者先扔豆（轮 6~7）。
+  // 关键修复：两张明牌点数相同（相同点数）时，统一按座位先后顺序破平（座位号小者先下豆），
+  // 不再用花色决定先后，避免「相同点数却因花色不同而乱序」。
   let leader = active[0];
-  let leaderCard = active[0].hand[cardIndex];
   for (const p of active) {
-    if (compareCards(p.hand[cardIndex], leaderCard) > 0) {
-      leader = p; leaderCard = p.hand[cardIndex];
+    const rp = RANK_ORDER[p.hand[cardIndex].rank];
+    const rl = RANK_ORDER[leader.hand[cardIndex].rank];
+    if (smallestFirst) {
+      if (rp < rl || (rp === rl && p.id < leader.id)) leader = p;
+    } else {
+      if (rp > rl || (rp === rl && p.id < leader.id)) leader = p;
     }
   }
   return leader.id;
@@ -610,7 +607,7 @@ function awaitAction(room, seat) {
         setMessage(room, `${room.players[seat].name} 长时间未操作，自动弃牌。`);
         resolve({ type: 'fold' });
       }
-    }, 90000);
+    }, 45000);
   });
 }
 
@@ -1049,6 +1046,20 @@ const server = http.createServer(async (req, res) => {
     req.on('close', () => {
       clearInterval(hb);
       if (player.sse === res) { player.sse = null; player.connected = false; }
+      // 对局进行中掉线：立即让其弃牌，避免机器人干等（原 90s 超时太慢会导致「机器人卡住不动」）
+      if (room.gameRunning && room.players[seat] && !room.players[seat].folded) {
+        const p = room.players[seat];
+        if (room.awaitingAction && room.awaitingAction.seat === seat) {
+          if (room.awaitTimer) clearTimeout(room.awaitTimer);
+          const resolve = room.awaitingAction.resolve;
+          room.awaitingAction = null;
+          setMessage(room, `${p.name} 已离开，自动弃牌。`);
+          resolve({ type: 'fold' });
+        } else {
+          p.folded = true;
+          setMessage(room, `${p.name} 已离开，判负弃牌。`);
+        }
+      }
       broadcast(room);
     });
     return;

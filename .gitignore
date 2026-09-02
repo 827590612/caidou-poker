@@ -10,3 +10,6 @@ android/**/build/
 ios/App/Pods/
 ios/App/build/
 ios/App/App.xcworkspace
+
+# cloudflare tunnel runtime state
+.cloudflare-tunnel/

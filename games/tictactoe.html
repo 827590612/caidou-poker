@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>井字棋</title>
+<style>
+  :root{--bg1:#0f1729;--bg2:#16233f;--gold:#e6c86e;--text:#eef2ff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,"Microsoft YaHei",sans-serif;background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 14px}
+  h1{font-size:32px;font-weight:800}
+  .bar{display:flex;gap:12px;align-items:center;margin:14px 0;flex-wrap:wrap;justify-content:center}
+  .status{background:rgba(255,255,255,.08);padding:10px 18px;border-radius:10px;font-size:15px;font-weight:700}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-weight:700;
+    background:linear-gradient(90deg,var(--gold),#f3e2a8);color:#0f1729}
+  .board{display:grid;grid-template-columns:repeat(3,96px);grid-template-rows:repeat(3,96px);gap:10px;margin-top:8px}
+  .cell{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:14px;
+    display:flex;align-items:center;justify-content:center;font-size:54px;font-weight:800;cursor:pointer;user-select:none;
+    transition:background .15s,transform .1s}
+  .cell:hover{background:rgba(255,255,255,.13)}.cell:active{transform:scale(.96)}
+  .cell.x{color:#38bdf8}.cell.o{color:#f87171}
+  .cell.win{background:linear-gradient(160deg,#1b4d3e,#2a6b54)}
+  .hint{margin-top:16px;color:#9fb0d0;font-size:13px;text-align:center;line-height:1.7}
+</style>
+</head>
+<body>
+  <h1>❌⭕ 井字棋</h1>
+  <div class="bar">
+    <div class="status" id="status">轮到你（❌）</div>
+    <button id="new">重新开始</button>
+    <button id="swap">切换先手</button>
+  </div>
+  <div class="board" id="board"></div>
+  <p class="hint">你执 ❌，电脑执 ⭕。三子连成一线即获胜。<br/>点「切换先手」可让电脑先走。</p>
+<script>
+(function(){
+  const boardEl=document.getElementById('board'),statusEl=document.getElementById('status');
+  let board,player,ai,over,humanTurn;
+  function init(humanFirst){
+    board=Array(9).fill('');player='X';ai='O';over=false;humanTurn=humanFirst;
+    boardEl.innerHTML='';
+    for(let i=0;i<9;i++){const c=document.createElement('div');c.className='cell';c.dataset.i=i;
+      c.onclick=()=>click(i);boardEl.appendChild(c);}
+    updateStatus();
+    if(!humanTurn)setTimeout(aiMove,400);
+  }
+  function updateStatus(){if(over)return;statusEl.textContent=humanTurn?'轮到你（❌）':'电脑思考中…（⭕）';}
+  function click(i){
+    if(over||!humanTurn||board[i])return;
+    place(i,player);
+    if(end())return;
+    humanTurn=false;updateStatus();setTimeout(aiMove,350);
+  }
+  function place(i,m){
+    board[i]=m;const c=boardEl.children[i];
+    c.textContent=m==='X'?'❌':'⭕';c.classList.add(m==='X'?'x':'o');
+  }
+  function wins(b){
+    const L=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for(const l of L){if(b[l[0]]&&b[l[0]]===b[l[1]]&&b[l[1]]===b[l[2]])return l;}
+    return null;
+  }
+  function full(b){return b.every(x=>x);}
+  function end(){
+    const w=wins(board);
+    if(w){over=true;w.forEach(i=>boardEl.children[i].classList.add('win'));
+      statusEl.textContent=(board[w[0]]===player)?'🎉 你赢了！':'电脑赢了！';return true;}
+    if(full(board)){over=true;statusEl.textContent='平局！';return true;}
+    return false;
+  }
+  function aiMove(){
+    if(over)return;
+    const i=best();
+    if(i==null)return;
+    place(i,ai);
+    if(end())return;
+    humanTurn=true;updateStatus();
+  }
+  function best(){
+    let bi=null,bs=-Infinity;
+    for(let i=0;i<9;i++){if(!board[i]){board[i]=ai;const s=minimax(board,0,false,-Infinity,Infinity);board[i]='';
+      if(s>bs){bs=s;bi=i;}}}
+    return bi;
+  }
+  function minimax(b,d,max,alpha,beta){
+    const w=wins(b);
+    if(w)return w.includes(ai)?10-d:d-10;
+    if(full(b))return 0;
+    if(max){
+      let v=-Infinity;
+      for(let i=0;i<9;i++)if(!b[i]){b[i]=ai;v=Math.max(v,minimax(b,d+1,false,alpha,beta));b[i]='';alpha=Math.max(alpha,v);if(beta<=alpha)break;}
+      return v;
+    }else{
+      let v=Infinity;
+      for(let i=0;i<9;i++)if(!b[i]){b[i]=player;v=Math.min(v,minimax(b,d+1,true,alpha,beta));b[i]='';beta=Math.min(beta,v);if(beta<=alpha)break;}
+      return v;
+    }
+  }
+  let hf=true;
+  document.getElementById('new').onclick=()=>init(hf);
+  document.getElementById('swap').onclick=()=>{hf=!hf;init(hf);};
+  init(hf);
+})();
+</script>
+</body>
+</html>

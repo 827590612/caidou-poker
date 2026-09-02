@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>俄罗斯方块</title>
+<style>
+  :root{--bg1:#0f1729;--bg2:#16233f;--gold:#e6c86e;--text:#eef2ff}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:system-ui,"Microsoft YaHei",sans-serif;background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 14px}
+  h1{font-size:32px;font-weight:800}
+  .wrap{display:flex;gap:18px;align-items:flex-start;margin-top:14px;flex-wrap:wrap;justify-content:center}
+  canvas{background:#0b1220;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .side{display:flex;flex-direction:column;gap:12px;min-width:120px}
+  .box{background:rgba(255,255,255,.08);border-radius:12px;padding:12px 14px}
+  .box b{display:block;font-size:24px;color:var(--gold)}
+  .box span{font-size:11px;color:#9fb0d0}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 16px;font-weight:700;
+    background:linear-gradient(90deg,var(--gold),#f3e2a8);color:#0f1729}
+  .hint{margin-top:14px;color:#9fb0d0;font-size:13px;text-align:center;line-height:1.7;max-width:340px}
+  .overlay{position:fixed;inset:0;background:rgba(8,12,24,.86);display:none;flex-direction:column;
+    align-items:center;justify-content:center;gap:16px;z-index:10}
+  .overlay.show{display:flex}.overlay h2{font-size:30px}
+  .pad{display:grid;grid-template-columns:repeat(3,56px);gap:8px;margin-top:14px}
+  .pad button{padding:14px 0;font-size:18px}
+  @media(min-width:560px){.pad{display:none}}
+</style>
+</head>
+<body>
+  <h1>🧱 俄罗斯方块</h1>
+  <div class="wrap">
+    <canvas id="cv" width="240" height="480"></canvas>
+    <div class="side">
+      <div class="box"><b id="score">0</b><span>得分</span></div>
+      <div class="box"><b id="lines">0</b><span>消除行</span></div>
+      <div class="box"><b id="best">0</b><span>最高分</span></div>
+      <button id="start">开始 / 重玩</button>
+      <div class="pad">
+        <span></span><button data-a="rot">⟳</button><span></span>
+        <button data-a="left">◀</button><button data-a="down">▼</button><button data-a="right">▶</button>
+      </div>
+    </div>
+  </div>
+  <p class="hint">← → 移动，↑ 旋转，↓ 加速下落。手机用下方按钮。<br/>填满整行即可消除得分。</p>
+  <div class="overlay" id="over"><h2 id="overT">游戏结束</h2><button id="again">再来一局</button></div>
+<script>
+(function(){
+  const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+  const COLS=10,ROWS=20,CELL=cv.width/COLS;
+  const SHAPES={
+    I:[[1,1,1,1]],O:[[1,1],[1,1]],
+    T:[[0,1,0],[1,1,1]],S:[[0,1,1],[1,1,0]],Z:[[1,1,0],[0,1,1]],
+    J:[[1,0,0],[1,1,1]],L:[[0,0,1],[1,1,1]]
+  };
+  const COLORS={I:'#38bdf8',O:'#fde047',T:'#c084fc',S:'#4ade80',Z:'#f87171',J:'#60a5fa',L:'#fb923c'};
+  let board,piece,type,best=+(localStorage.getItem('tetrisbest')||0),score,lines,timer,running=false,dropInt=600,acc=0,last=0;
+  const scoreEl=document.getElementById('score'),linesEl=document.getElementById('lines'),bestEl=document.getElementById('best');
+  bestEl.textContent=best;
+  function reset(){board=Array.from({length:ROWS},()=>Array(COLS).fill(null));score=0;lines=0;scoreEl.textContent=0;linesEl.textContent=0;spawn();}
+  function spawn(){
+    const keys=Object.keys(SHAPES);type=keys[Math.floor(Math.random()*keys.length)];
+    const s=SHAPES[type],w=s[0].length;
+    piece={x:Math.floor((COLS-w)/2),y:0,shape:s};
+    if(collide(piece.x,piece.y,piece.shape))return gameOver();
+  }
+  function collide(x,y,shape){
+    for(let i=0;i<shape.length;i++)for(let j=0;j<shape[i].length;j++){
+      if(!shape[i][j])continue;
+      const nx=x+j,ny=y+i;
+      if(nx<0||nx>=COLS||ny>=ROWS)return true;
+      if(ny>=0&&board[ny][nx])return true;
+    }
+    return false;
+  }
+  function merge(){piece.shape.forEach((r,i)=>r.forEach((v,j)=>{if(v){const ny=piece.y+i,nx=piece.x+j;if(ny>=0)board[ny][nx]=type;}}));}
+  function clearLines(){
+    let c=0;
+    for(let i=ROWS-1;i>=0;i--){if(board[i].every(c=>c)){board.splice(i,1);board.unshift(Array(COLS).fill(null));c++;i++;}}
+    if(c){lines+=c;score+=c*100+(c>1?(c-1)*50:0);scoreEl.textContent=score;linesEl.textContent=lines;
+      if(score>best){best=score;localStorage.setItem('tetrisbest',best);bestEl.textContent=best;}}
+  }
+  function step(){
+    if(!collide(piece.x,piece.y+1,piece.shape)){piece.y++;draw();}
+    else{merge();clearLines();spawn();}
+  }
+  function move(dx){if(!collide(piece.x+dx,piece.y,piece.shape)){piece.x+=dx;draw();}}
+  function rotate(){
+    const s=piece.shape,n=s[0].length,m=s.length,r=Array.from({length:n},()=>Array(m).fill(0));
+    for(let i=0;i<m;i++)for(let j=0;j<n;j++)r[j][m-1-i]=s[i][j];
+    if(!collide(piece.x,piece.y,r)){piece.shape=r;draw();}
+    else if(!collide(piece.x-1,piece.y,r)){piece.x--;piece.shape=r;draw();}
+    else if(!collide(piece.x+1,piece.y,r)){piece.x++;piece.shape=r;draw();}
+  }
+  function hardDrop(){while(!collide(piece.x,piece.y+1,piece.shape))piece.y++;merge();clearLines();spawn();draw();}
+  function draw(){
+    ctx.fillStyle='#0b1220';ctx.fillRect(0,0,cv.width,cv.height);
+    for(let i=0;i<ROWS;i++)for(let j=0;j<COLS;j++)if(board[i][j])block(j,i,COLORS[board[i][j]]);
+    if(piece){const s=piece.shape;for(let i=0;i<s.length;i++)for(let j=0;j<s[i].length;j++)
+      if(s[i][j]){const ny=piece.y+i,nx=piece.x+j;if(ny>=0)block(nx,ny,COLORS[type]);}}
+  }
+  function block(x,y,c){ctx.fillStyle=c;ctx.fillRect(x*CELL+1,y*CELL+1,CELL-2,CELL-2);
+    ctx.fillStyle='rgba(255,255,255,.18)';ctx.fillRect(x*CELL+1,y*CELL+1,CELL-2,3);}
+  function loop(t){if(!running)return;if(!last)last=t;const dt=t-last;last=t;acc+=dt;
+    if(acc>=dropInt){acc=0;step();}requestAnimationFrame(loop);}
+  function gameOver(){running=false;document.getElementById('overT').textContent='得分 '+score;document.getElementById('over').classList.add('show');}
+  function start(){reset();draw();document.getElementById('over').classList.remove('show');running=true;last=0;acc=0;requestAnimationFrame(loop);}
+  const KEY={ArrowLeft:()=>move(-1),ArrowRight:()=>move(1),ArrowUp:rotate,ArrowDown:()=>step()};
+  window.addEventListener('keydown',e=>{if(KEY[e.key]){e.preventDefault();if(running)KEY[e.key]();}});
+  document.querySelector('.pad').addEventListener('click',e=>{const a=e.target.dataset.a;if(!a||!running)return;
+    if(a==='left')move(-1);else if(a==='right')move(1);else if(a==='rot')rotate();else if(a==='down')step();});
+  document.getElementById('start').onclick=start;
+  document.getElementById('again').onclick=start;
+  reset();draw();
+})();
+</script>
+</body>
+</html>
